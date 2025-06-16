@@ -184,3 +184,17 @@ MenuLink:
      visible: true
      development: false
      is_active: true
+
+   - uuid: 00000000-0000-0000-0000-000000009400
+     name: reports
+     display: Reports
+     url_for: report.report_list
+     tier_uuid: 00000000-0000-0000-0000-000000002000
+     icon: fa-server
+     position: 5
+     visible: true
+     development: false
+     is_active: true
+
+
+     

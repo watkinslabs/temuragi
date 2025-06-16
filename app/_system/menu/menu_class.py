@@ -3,9 +3,13 @@ from pprint import pprint
 from sqlalchemy import and_
 from typing import List, Dict, Optional, Union
 
-from app.models import Menu, MenuTier, MenuLink, UserQuickLink, RolePermission, Permission, Role, User
+try:
+    from app.models import Menu, MenuTier, MenuLink, UserQuickLink, RolePermission, User
+except:
+    pass
 
 class MenuBuilder:
+    __depends_on_ = [ 'Menu', 'MenuTier', 'MenuLink', 'UserQuickLink', 'RolePermission', 'User']
     def __init__(self, db_session):
         """
         Initialize the MenuBuilder with a database session.

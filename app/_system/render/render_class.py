@@ -53,23 +53,14 @@ class ContextAwareEnvironment(JinjaEnvironment):
         context = super().make_context(vars_, shared, locals_)
         
         # Debug logging
-        print("=== MAKE CONTEXT CALLED ===")
+        #print("=== MAKE CONTEXT CALLED ===")
         
         if has_app_context():
-            print("Has app context")
             processors = current_app.template_context_processors.get(None, [])
-            print(f"Found {len(processors)} context processors")
             
             for func in processors:
-                print(f"Running processor: {func.__name__}")
                 data = func()
-                print(f"Processor returned: {data}")
                 context.vars.update(data)
-        else:
-            print("NO APP CONTEXT")
-        
-        print(f"Final context vars: {list(context.vars.keys())}")
-        print("========================")
         
         return context
 
@@ -309,9 +300,6 @@ class TemplateRenderer:
         if not current:
             raise TemplateNotFound(fragment_key)
         
-        # Debug what we're receiving
-        self._logger.debug(f"_context_include called with fragment_key: {fragment_key}")
-        self._logger.debug(f"Context type: {type(context)}")
         
         # Extract variables from Jinja2 context
         merged_context = {}
@@ -336,7 +324,6 @@ class TemplateRenderer:
         # Add passed kwargs on top
         merged_context.update(kwargs)
         
-        self._logger.debug(f"Context include '{fragment_key}' in {current['type']} with merged keys: {list(merged_context.keys())}")
         
         if current['type'] == 'template':
             return self._include_template_fragment(current['uuid'], fragment_key, **merged_context)
@@ -353,13 +340,11 @@ class TemplateRenderer:
             'fragment_key': fragment_key
         }
         self._context_stack.append(context)
-        self._logger.debug(f"Pushed context: {context}")
     
     def _pop_context(self):
         """Pop rendering context from stack"""
         if self._context_stack:
             context = self._context_stack.pop()
-            self._logger.debug(f"Popped context: {context}")
             return context
         return None
     
@@ -382,7 +367,6 @@ class TemplateRenderer:
         self._check_recursion()
         
         current_context = self._get_current_context()
-        self._logger.debug(f"Including fragment {target_uuid}:{fragment_key} from context {current_context}")
         
         # If we're in a template fragment context, try template fragment first
         if current_context and current_context['type'] == 'template':
@@ -435,7 +419,6 @@ class TemplateRenderer:
         """Include a template fragment with passed context"""
         self._check_recursion()
         
-        self._logger.debug(f"Including template fragment: {template_uuid}:{fragment_key}")
         
         # Push template fragment context
         self._push_context('template', template_uuid, fragment_key)
@@ -604,15 +587,14 @@ class TemplateRenderer:
         template = self.jinja_env.from_string(content_template_source)
         return template.render(**context)
     
-    def render_page(self, page_identifier, data=None):
+    
+    def render_page(self, page_identifier, **kwargs):
         """Alias for render_template for backward compatibility"""
-        if data is None:
-            data = {}
-        return self.render_template(page_identifier, **data)
+        return self.render_template(page_identifier, **kwargs)
 
     def render_template(self, page_identifier, fragment_only=None, **data):
         """Main render function with htmx support"""
-        self._logger.info(f"Rendering page: {page_identifier}")
+        #self._logger.info(f"Rendering page: {page_identifier}")
         self._reset_recursion()
         self._context_stack = []  # Clear context stack
         
@@ -660,7 +642,7 @@ class TemplateRenderer:
             # Increment view count
             page.increment_view_count(self.session)
             
-            self._logger.info(f"Successfully rendered page: {page.slug}")
+            #self._logger.info(f"Successfully rendered page: {page.slug}")
             return rendered_content
             
         except Exception as e:

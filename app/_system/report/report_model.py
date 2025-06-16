@@ -11,7 +11,7 @@ class Report(BaseModel):
 
     """Model for storing reports with SQL queries and configuration"""
     __tablename__ = 'reports'
-    __depends_on__ = ['Connection', 'DatabaseType', 'DataType', 'VariableType', 'Permission']
+    __depends_on__ = ['Connection', 'DataType', 'VariableType', 'Permission']
     
     # Core fields
     slug = Column(String(255), nullable=False, unique=True)  # Immutable identifier for permissions
@@ -24,7 +24,7 @@ class Report(BaseModel):
     connection_id = Column(
         PG_UUID(as_uuid=True),
         ForeignKey('connections.uuid', ondelete='RESTRICT'),
-        nullable=False
+        nullable=True
     )
     
     # Configuration fields
@@ -33,11 +33,6 @@ class Report(BaseModel):
     icon = Column(String(50), nullable=True)
     color = Column(String(7), nullable=True)
     
-    related_report_id = Column(
-        PG_UUID(as_uuid=True),
-        ForeignKey('reports.uuid', ondelete='SET NULL'),
-        nullable=True
-    )
     
     # Boolean flags
     is_wide = Column(Boolean, default=False)
@@ -61,6 +56,7 @@ class Report(BaseModel):
     
     # Relationships
     connection = relationship("Connection", foreign_keys=[connection_id])
+    
     columns = relationship(
         "ReportColumn", 
         back_populates="report", 
@@ -84,13 +80,15 @@ class Report(BaseModel):
         cascade="all, delete-orphan"
     )
     
-    # Self-referential relationship
-    related_report = relationship(
-        "Report", 
-        remote_side='Report.uuid',
-        foreign_keys=[related_report_id]
+   
+        
+    report_template_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey('report_templates.uuid', ondelete='SET NULL'),
+        nullable=True
     )
-    
+
+    report_template = relationship("ReportTemplate", foreign_keys=[report_template_id])
     # Indexes
     __table_args__ = (
         Index('idx_report_slug', 'slug'),

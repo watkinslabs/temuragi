@@ -7,4 +7,7 @@ x added db init frfom cli
 x added db data from cli
 x add templates
 x export import data
-o render templates
+x render templates
+x ad encrytpthon to passwords for connections
+o encrypt more?
+o password detection if incrypted broken... doesnt matter.. but is

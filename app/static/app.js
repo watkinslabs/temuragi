@@ -800,13 +800,14 @@ class DynamicDataTable {
         `;
         
         if (this.options.show_create_button) {
-            html += `
-                        <div>
-                            <button class="btn btn-light text-dark fw-medium" id="${this.model_name.toLowerCase()}_create_btn">
+            html += `<div><a class="btn btn-light text-dark fw-medium" 
+                            id="${this.model_name.toLowerCase()}_create_btn"
+                            hx-post="${this.options.create_url}"
+                            hx-target="#main-content"
+                            hx-swap="innerHTML"
+                            hx-indicator=".htmx-indicator">
                                 <i class="fas fa-plus me-2"></i>New ${this.model_name}
-                            </button>
-                        </div>
-            `;
+                            </a></div>`;
         }
         
         html += `
@@ -1033,15 +1034,16 @@ class DynamicDataTable {
         if (!$(`#${this.container_id}_styles`).length) {
             $('head').append(`<div id="${this.container_id}_styles">${style}</div>`);
         }
-        
-        // Bind create button if exists
-        if (this.options.show_create_button) {
-            $(`#${this.model_name.toLowerCase()}_create_btn`).on('click', () => {
-                if (this.options.create_url) {
-                    window.location.href = this.options.create_url;
-                }
-            });
+
+        if (typeof htmx !== 'undefined') {
+            // Small delay to ensure DOM is ready
+            setTimeout(() => {
+                console.log('Processing HTMX for table:', this.container_id);
+                htmx.process(container[0]);
+            }, 10);
         }
+        
+      
     }
     
     init_datatable() {

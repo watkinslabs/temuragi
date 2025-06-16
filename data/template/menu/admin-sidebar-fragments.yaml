@@ -138,16 +138,16 @@ TemplateFragment:
                   <i class="fas fa-external-link-alt ms-1 small"></i>
               </a>
           {% else %}
-              <!-- Internal link - use htmx -->
-              <a href="{{ actual_url }}" 
-                class="nav_item child"
-                hx-get="{{ actual_url }}" 
-                hx-target="#main-content" 
-                hx-push-url="true"
-                hx-indicator=".htmx-indicator">
-                  {% if item.icon %}<i class="fas {{ item.icon }} me-2"></i>{% endif %}
-                  {{ item.display }}
-              </a>
+           <!-- Internal link - use htmx POST -->
+            <a href="{{ actual_url }}" 
+              class="nav_item child"
+              hx-post="{{ actual_url }}" 
+              hx-target="#main-content" 
+              hx-swap="innerHTML"
+              hx-indicator=".htmx-indicator">
+                {% if item.icon %}<i class="fas {{ item.icon }} me-2"></i>{% endif %}
+                {{ item.display }}
+            </a>
           {% endif %}
       {% endif %}
    variables_schema: |

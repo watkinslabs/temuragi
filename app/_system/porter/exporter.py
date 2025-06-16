@@ -18,6 +18,25 @@ class ComponentExporter:
             'id'  # Often auto-increment primary keys
         }
 
+    def _safe_string_convert(self, value):
+        """Safely convert any SQLAlchemy object to string"""
+        if value is None:
+            return None
+            
+        # Handle SQLAlchemy quoted_name objects
+        if hasattr(value, '__class__') and 'quoted_name' in str(value.__class__):
+            return str(value)
+            
+        # Handle any SQLAlchemy wrapper objects
+        if hasattr(value, '__module__') and value.__module__ and 'sqlalchemy' in value.__module__:
+            return str(value)
+            
+        # For any object with explicit string representation
+        if hasattr(value, '__str__') and not isinstance(value, (str, int, float, bool)):
+            return str(value)
+            
+        return value
+
     def _convert_value_to_exportable(self, value):
         """Convert database values to exportable format"""
         if value is None:
@@ -34,8 +53,9 @@ class ComponentExporter:
         # Convert SQLAlchemy quoted_name objects to plain strings
         if hasattr(value, '__str__') and 'quoted_name' in str(type(value)):
             return str(value)
-
-        return value
+            
+        # Additional safety for any SQLAlchemy objects
+        return self._safe_string_convert(value)
 
     def _get_foreign_key_name(self, model_instance, uuid_field, name_field='name'):
         """Get the name for a foreign key UUID field"""
@@ -54,19 +74,13 @@ class ComponentExporter:
         meta = OrderedDict()
 
         # Get table name - convert to string to avoid SQLAlchemy objects
-        table_name = model_object.__table__.name
-        if hasattr(table_name, '__str__'):
-            meta['tablename'] = str(table_name)
-        else:
-            meta['tablename'] = table_name
+        table_name = self._safe_string_convert(model_object.__table__.name)
+        meta['tablename'] = table_name
 
         # Get schema if available - convert to string
         if hasattr(model_object.__table__, 'schema') and model_object.__table__.schema:
-            schema = model_object.__table__.schema
-            if hasattr(schema, '__str__'):
-                meta['schema'] = str(schema)
-            else:
-                meta['schema'] = schema
+            schema = self._safe_string_convert(model_object.__table__.schema)
+            meta['schema'] = schema
         else:
             meta['schema'] = 'public'  # Default schema
 
@@ -156,19 +170,23 @@ class ComponentExporter:
 
             # First pass: add all column data in order
             for column in model_object.__table__.columns:
-                value = getattr(model_object, column.name)
+                # Ensure column name is a plain string
+                column_name = self._safe_string_convert(column.name)
+                
+                value = getattr(model_object, column_name)
                 converted_value = self._convert_value_to_exportable(value)
+                
                 # Include ALL fields in templates, even None values for auto-generated fields
                 if template_mode or converted_value is not None:
                     # For template mode, provide example values for None fields
                     if template_mode and converted_value is None:
-                        if column.name.lower() in self.auto_generated_fields:
+                        if column_name.lower() in self.auto_generated_fields:
                             # Provide example values for auto-generated fields
-                            if column.name == 'uuid':
+                            if column_name == 'uuid':
                                 converted_value = "12345678-1234-1234-1234-123456789abc"
-                            elif 'created_at' in column.name or 'updated_at' in column.name:
+                            elif 'created_at' in column_name or 'updated_at' in column_name:
                                 converted_value = "2024-01-01T00:00:00"
-                            elif 'created_on' in column.name or 'updated_on' in column.name:
+                            elif 'created_on' in column_name or 'updated_on' in column_name:
                                 converted_value = "2024-01-01T00:00:00"
                             else:
                                 converted_value = "auto_generated_value"
@@ -176,7 +194,7 @@ class ComponentExporter:
                             # Regular field with None value, keep as None or provide example
                             converted_value = None
                     
-                    data_section[column.name] = converted_value
+                    data_section[column_name] = converted_value
 
             # Second pass: insert foreign key names after their UUID fields
             if foreign_key_mappings:
@@ -327,20 +345,23 @@ class ComponentExporter:
                     
                     # First pass: add all column data
                     for column in model_class.__table__.columns:
-                        value = getattr(obj, column.name)
+                        # Ensure column name is a plain string
+                        column_name = self._safe_string_convert(column.name)
+                        
+                        value = getattr(obj, column_name)
                         converted_value = self._convert_value_to_exportable(value)
                         
                         if template_mode or converted_value is not None:
                             if template_mode and converted_value is None:
-                                if column.name.lower() in self.auto_generated_fields:
-                                    if column.name == 'uuid':
+                                if column_name.lower() in self.auto_generated_fields:
+                                    if column_name == 'uuid':
                                         converted_value = f"uuid_{data_list.__len__() + 1}"
-                                    elif 'created_at' in column.name or 'updated_at' in column.name:
+                                    elif 'created_at' in column_name or 'updated_at' in column_name:
                                         converted_value = "2024-01-01T00:00:00"
                                     else:
                                         converted_value = "auto_generated_value"
                             
-                            obj_data[column.name] = converted_value
+                            obj_data[column_name] = converted_value
                     
                     # Second pass: add foreign key names
                     if foreign_key_mappings:
@@ -408,4 +429,4 @@ class ComponentExporter:
             except Exception as e:
                 self.output_manager.log_error(f"Error exporting all model objects: {e}")
                 self.output_manager.output_error(f"Error exporting: {e}")
-                return 1        
+                return 1

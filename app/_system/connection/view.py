@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 
 
-from .connection_model import Connection
+from ..report.connection_model import Connection
 from app.admin.database_type.database_type_model import DatabaseType
 
 

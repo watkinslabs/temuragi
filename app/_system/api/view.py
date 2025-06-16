@@ -87,7 +87,7 @@ def logout():
     return redirect(url_for('auth.login'))
 
 @bp.route('/status', methods=['GET'])
-def auth_status():
+def status():
     """Quick auth status check"""
     auth_header = request.headers.get('Authorization')
     

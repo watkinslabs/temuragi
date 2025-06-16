@@ -157,7 +157,7 @@ def create_model_api_permissions(model_class, app=None):
 
         table_name = model_class.__tablename__
         model_name = model_class.__name__
-        api_actions = ['read', 'write', 'update', 'delete']
+        api_actions = ['read', 'write', 'update', 'delete','metadata','list','count']
 
         created_count = 0
         for action in api_actions:
@@ -308,3 +308,11 @@ def discover_and_import(app=None,file_pattern="_model.py"):
         if app:
             app.logger.error(f"Failed to resolve Model class dependencies: {e}")
         raise    
+def preview_model_registry():
+    """
+    Print a summary of all registered models, their table names, and declared dependencies.
+    """
+    for model_name, model_cls in _model_registry.items():
+        tablename = getattr(model_cls, "__tablename__", "<no __tablename__>")
+        depends = getattr(model_cls, "__depends_on__", [])
+        print(f"{model_name:30} | table: {tablename:20} | depends_on: {depends}")

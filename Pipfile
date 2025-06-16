@@ -18,6 +18,7 @@ pyaml = "*"
 flask = "*"
 tabulate = "*"
 pyjwt = "*"
+sqlalchemy-utils = "*"
 
 [dev-packages]
 

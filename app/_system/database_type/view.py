@@ -8,7 +8,7 @@ from datetime import datetime
 
 
 from app.admin.connection.connection_model import Connection
-from .database_type_model import DatabaseType
+from ..report.database_type_model import DatabaseType
 
 bp = Blueprint(
     'database_type',
