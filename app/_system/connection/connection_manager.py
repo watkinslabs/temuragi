@@ -38,6 +38,8 @@ def parse_key_value_conn_string(conn_str):
 
 
 class DBManager:
+    __depends_on__=[]
+    
     def __init__(self, session_factory: scoped_session):
         """
         session_factory: a SQLAlchemy scoped_session or sessionmaker

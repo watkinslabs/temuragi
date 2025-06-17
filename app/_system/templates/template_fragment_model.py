@@ -236,7 +236,7 @@ class TemplateFragment(BaseModel):
     def get_active_version(cls, session, template_uuid, template_file_path):
         """Get the currently active version for a specific template and template_file_path"""
         logger = cls._get_logger()
-        logger.debug(f"Getting active version for template {template_uuid}, file {template_file_path}")
+        #logger.debug(f"Getting active version for template {template_uuid}, file {template_file_path}")
         
         fragment = session.query(cls)\
                          .filter_by(template_uuid=template_uuid,
@@ -244,10 +244,10 @@ class TemplateFragment(BaseModel):
                                    is_active=True)\
                          .first()
         
-        if fragment:
-            logger.debug(f"Found active version {fragment.version_number} for {template_file_path}")
-        else:
-            logger.warning(f"No active version found for template {template_uuid}, file {template_file_path}")
+        #if fragment:
+        #    logger.debug(f"Found active version {fragment.version_number} for {template_file_path}")
+        #else:
+        #    logger.warning(f"No active version found for template {template_uuid}, file {template_file_path}")
         
         return fragment
 
@@ -255,7 +255,7 @@ class TemplateFragment(BaseModel):
     def get_active_by_key(cls, session, template_uuid, fragment_key):
         """Get active fragment by template and fragment_key"""
         logger = cls._get_logger()
-        logger.debug(f"Getting active fragment by key: template {template_uuid}, fragment {fragment_key}")
+        #logger.debug(f"Getting active fragment by key: template {template_uuid}, fragment {fragment_key}")
         
         fragment = session.query(cls)\
                          .filter_by(template_uuid=template_uuid,
@@ -263,10 +263,10 @@ class TemplateFragment(BaseModel):
                                    is_active=True)\
                          .first()
         
-        if fragment:
-            logger.debug(f"Found active fragment '{fragment_key}' version {fragment.version_number}")
-        else:
-            logger.warning(f"No active fragment found for template {template_uuid}, key {fragment_key}")
+        #if fragment:
+        #    logger.debug(f"Found active fragment '{fragment_key}' version {fragment.version_number}")
+        #else:
+        #    logger.warning(f"No active fragment found for template {template_uuid}, key {fragment_key}")
         
         return fragment
 

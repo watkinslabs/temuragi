@@ -7,6 +7,8 @@ from app.base.model import BaseModel
 
 class DataType(BaseModel):
     __tablename__ = 'data_types'
+    __depends_on__ = []  
+
 
     name = Column(String, unique=True, nullable=False)
     display = Column(String, nullable=False)

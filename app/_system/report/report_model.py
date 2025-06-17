@@ -6,13 +6,19 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID, JSONB
 
 from app.base.model import BaseModel
 
-
+from app.classes import Permission,RolePermission,User
 class Report(BaseModel):
 
     """Model for storing reports with SQL queries and configuration"""
     __tablename__ = 'reports'
-    __depends_on__ = ['Connection', 'DataType', 'VariableType', 'Permission']
-    
+    __depends_on__ = [
+        'Connection',
+        'DataType',
+        'VariableType',
+        'Permission',
+        'RolePermission',
+        'User'
+    ]    
     # Core fields
     slug = Column(String(255), nullable=False, unique=True)  # Immutable identifier for permissions
     name = Column(String(255), nullable=False)  # Display name that can change
@@ -258,11 +264,6 @@ class Report(BaseModel):
     @classmethod
     def create_initial_data(cls, session):
         """Create initial report management permissions"""
-        from app.register.database import get_model
-        
-        Permission = get_model('Permission')
-        if not Permission:
-            return
         
         # Create general report management permissions
         management_permissions = [
@@ -287,13 +288,7 @@ class Report(BaseModel):
     
     def create_permissions(self, session):
         """Create permissions for this specific report using slug"""
-        from app.register.database import get_model
         
-        Permission = get_model('Permission')
-        if not Permission:
-            return False, "Permission model not available"
-        
-        # Skip if already created
         if self.permissions_created:
             return False, "Permissions already created"
         
@@ -328,11 +323,6 @@ class Report(BaseModel):
     
     def update_permission_descriptions(self, session):
         """Update permission descriptions when report name changes"""
-        from app.register.database import get_model
-        Permission = get_model('Permission')
-        
-        if not Permission:
-            return False, "Permission model not available"
         
         permissions = session.query(Permission).filter(
             Permission.service == 'report',
@@ -358,11 +348,6 @@ class Report(BaseModel):
     
     def delete_permissions(self, session):
         """Delete all permissions for this report"""
-        from app.register.database import get_model
-        Permission = get_model('Permission')
-        
-        if not Permission:
-            return False, "Permission model not available"
         
         permissions = session.query(Permission).filter(
             Permission.service == 'report',
@@ -370,7 +355,6 @@ class Report(BaseModel):
         ).all()
         
         # Also need to delete RolePermission entries
-        RolePermission = get_model('RolePermission')
         if RolePermission:
             for perm in permissions:
                 role_perms = session.query(RolePermission).filter(
@@ -436,11 +420,6 @@ class Report(BaseModel):
     @classmethod
     def get_user_reports(cls, session, user_uuid):
         """Get all reports a user has permission to view"""
-        from app.register.database import get_model
-        
-        RolePermission = get_model('RolePermission')
-        Permission = get_model('Permission')
-        User = get_model('User')
         
         if not all([RolePermission, Permission, User]):
             return []
@@ -482,11 +461,6 @@ class Report(BaseModel):
     
     def assign_to_role(self, session, role_uuid, actions=None):
         """Assign this report to a role with specified actions"""
-        from app.register.database import get_model
-        
-        RolePermission = get_model('RolePermission')
-        if not RolePermission:
-            return False, "RolePermission model not available"
         
         # Ensure permissions exist first
         if not self.permissions_created:
@@ -517,11 +491,6 @@ class Report(BaseModel):
     
     def remove_from_role(self, session, role_uuid, actions=None):
         """Remove this report from a role"""
-        from app.register.database import get_model
-        
-        RolePermission = get_model('RolePermission')
-        if not RolePermission:
-            return False, "RolePermission model not available"
         
         if actions is None:
             actions = ['view', 'execute', 'export', 'schedule', 'edit', 'delete', 'share']
@@ -539,11 +508,6 @@ class Report(BaseModel):
     
     def get_roles_with_access(self, session, action='view'):
         """Get all roles that have access to this report"""
-        from app.register.database import get_model
-        
-        Permission = get_model('Permission')
-        RolePermission = get_model('RolePermission')
-        Role = get_model('Role')
         
         if not all([Permission, RolePermission, Role]):
             return []

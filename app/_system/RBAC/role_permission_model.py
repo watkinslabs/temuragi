@@ -4,6 +4,8 @@ from sqlalchemy.orm import relationship
 
 from app.base.model import BaseModel
 
+from app.classes import Permission
+from app.models import User
 
 class RolePermission(BaseModel):
     """
@@ -36,15 +38,8 @@ class RolePermission(BaseModel):
     @classmethod
     def grant_permission(cls, session, role_uuid, permission_name):
         """Grant a permission to a role"""
-        from app.register.database import get_model
-        
-        # Get Permission model from registry
-        permission_model = get_model('Permission')
-        if not permission_model:
-            return False, "Permission model not available"
-        
-        # Find permission by name
-        permission = permission_model.find_by_name(session, permission_name)
+        # Direct usage now!
+        permission = Permission.find_by_name(session, permission_name)
         if not permission:
             return False, f"Permission not found: {permission_name}"
 
@@ -71,15 +66,8 @@ class RolePermission(BaseModel):
     @classmethod
     def revoke_permission(cls, session, role_uuid, permission_name):
         """Revoke a permission from a role"""
-        from app.register.database import get_model
-        
-        # Get Permission model from registry
-        permission_model = get_model('Permission')
-        if not permission_model:
-            return False, "Permission model not available"
-        
-        # Find permission by name
-        permission = permission_model.find_by_name(session, permission_name)
+        # Direct usage
+        permission = Permission.find_by_name(session, permission_name)
         if not permission:
             return False, f"Permission not found: {permission_name}"
 
@@ -100,22 +88,13 @@ class RolePermission(BaseModel):
     @classmethod
     def user_has_permission(cls, session, user_uuid, permission_name):
         """Check if a user has a specific permission through their role"""
-        from app.register.database import get_model
-        
-        # Get models from registry
-        user_model = get_model('User')
-        permission_model = get_model('Permission')
-        
-        if not user_model or not permission_model:
-            return False
-
-        # Get user's role
-        user = session.query(user_model).filter(user_model.uuid == user_uuid).first()
+        # Direct model usage
+        user = session.query(User).filter(User.uuid == user_uuid).first()
         if not user or not user.role_uuid:
             return False
 
         # Find permission
-        permission = permission_model.find_by_name(session, permission_name)
+        permission = Permission.find_by_name(session, permission_name)
         if not permission:
             return False
 
@@ -130,21 +109,13 @@ class RolePermission(BaseModel):
     @classmethod
     def get_user_permissions(cls, session, user_uuid):
         """Get all permissions for a user through their role"""
-        from app.register.database import get_model
-        
-        # Get models from registry
-        user_model = get_model('User')
-        permission_model = get_model('Permission')
-        
-        if not user_model or not permission_model:
-            return []
-
-        user = session.query(user_model).filter(user_model.uuid == user_uuid).first()
+        # Direct model usage
+        user = session.query(User).filter(User.uuid == user_uuid).first()
         if not user or not user.role_uuid:
             return []
 
-        permissions = session.query(permission_model).join(cls).filter(
+        permissions = session.query(Permission).join(cls).filter(
             cls.role_uuid == user.role_uuid
-        ).order_by(permission_model.service, permission_model.action).all()
+        ).order_by(Permission.service, Permission.action).all()
 
         return permissions

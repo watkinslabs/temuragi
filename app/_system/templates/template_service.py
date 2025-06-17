@@ -18,7 +18,12 @@ class TemplateService:
     Comprehensive service for CRUD operations on templates, pages, and fragments.
     Handles all template engine functionality including associations and versioning.
     """
-    
+    __depends_on__ = ['Template',
+                        'Page',
+                        'TemplateFragment',
+                        'PageFragment',
+                        'Theme',]
+
     def __init__(self, session: Session, logger: Optional[logging.Logger] = None):
         self.session = session
         self.logger = logger or logging.getLogger(__name__)

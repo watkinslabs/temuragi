@@ -4,7 +4,8 @@ from app.classes import TemplateRenderer
 # Create blueprint
 bp = Blueprint('theme', __name__, url_prefix='/theme')
 
-@bp.route('/')
+@bp.route('/',methods=['POST'])
+
 def index():
     """Simple test route that renders a page using the TemplateRenderer"""
     try:

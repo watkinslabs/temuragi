@@ -4,10 +4,11 @@ from functools import wraps
 from flask import session, g, current_app, jsonify
 from sqlalchemy.orm import Session
 
-from app.register.database import get_model
+from app.register.classes import get_model
 
 class AuthService:
     """Authentication service for handling user auth operations"""
+    __depends_on__=[]
     
     def __init__(self, db_session: Session):
         

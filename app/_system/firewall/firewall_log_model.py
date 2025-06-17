@@ -8,7 +8,8 @@ from app.base.model import Base
 class FirewallLog(Base):
     """Model for logging IP access requests"""
     __tablename__ = 'firewall_logs'
-
+    __depends_on__=[]
+    
     uuid = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     ip_address = Column(String(45), nullable=False)
     status = Column(Boolean, nullable=False)  # True = allowed, False = blocked

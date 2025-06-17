@@ -6,7 +6,7 @@ from app.base.model import BaseModel
 
 
 class MenuTier(BaseModel):
-    __depends_on__ = ['Menu']  # Add this line (self-reference for parent_uuid)
+    __depends_on__ = ['Menu']  
     __tablename__ = 'menu_tiers'
 
     name = Column(String(100), nullable=False)

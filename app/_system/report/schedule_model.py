@@ -59,6 +59,7 @@ class ReportSchedule(BaseModel):
     def create_initial_data(cls, session):
         """Create sample report schedules"""
         # Get the user activity report
+        from app.classes import Report
         user_report = session.query(Report).filter_by(name='user_activity_report').first()
         if not user_report:
             return

@@ -7,7 +7,8 @@ from app.base.model import BaseModel
 
 class DatabaseType(BaseModel):
     __tablename__ = 'database_types'
-
+    __depends_on__=[]
+    
     name = Column(
         Text,
         unique=True,

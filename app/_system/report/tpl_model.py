@@ -10,7 +10,7 @@ from app.base.model import BaseModel
 class ReportTemplate(BaseModel):
     """Model for report-specific template configurations"""
     __tablename__ = 'report_templates'
-    __depends_on__ = ['Template']
+    __depends_on__ = []
     
     # Link to actual template
     template_id = Column(

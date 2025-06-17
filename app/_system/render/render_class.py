@@ -1,6 +1,6 @@
 import logging
 from jinja2 import Environment as JinjaEnvironment, BaseLoader, TemplateNotFound, pass_context
-from flask import current_app, has_app_context, request
+from flask import current_app, has_app_context, request, g
 
 
 # Place this class definition above your TemplateRenderer class
@@ -9,6 +9,8 @@ class ContextWrapper:
     A smart wrapper for the template context that allows dot-notation
     for list indices without breaking any other functionality.
     """
+    __depends_on__=[]
+    
     def __init__(self, data):
         self._data = data
 
@@ -39,6 +41,8 @@ class ContextWrapper:
   
 
 class ContextAwareEnvironment(JinjaEnvironment):
+    __depends_on__=[]
+    
     def __init__(self, renderer, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -118,6 +122,8 @@ class ContextAwareEnvironment(JinjaEnvironment):
     
 
 class DbLoader(BaseLoader):
+    __depends_on__=[]
+    
     def __init__(self, session):
         self.session = session
         self._logger = self._get_logger()
@@ -132,7 +138,7 @@ class DbLoader(BaseLoader):
 
 
     def get_source(self, environment, template):
-        self._logger.debug(f"get_source: {template}")
+        #self._logger.debug(f"get_source: {template}")
 
         parts = template.split(':')
         if len(parts) != 3:
@@ -188,7 +194,7 @@ class DbLoader(BaseLoader):
 
 class TemplateRenderer:
     """Dynamic template render engine for Flask"""
-    __depends_on__ = ['ContextAwareEnvironment', 'DbLoader', 'MenuBuilder']
+    __depends_on__ = ['ContextAwareEnvironment', 'DbLoader', 'MenuBuilder','Template', 'TemplateFragment','Page','PageFragment']
 
     def __init__(self, session):
         self.session = session
@@ -383,7 +389,7 @@ class TemplateRenderer:
         fragment = PageFragment.get_active_by_key(self.session, target_uuid, fragment_key)
         
         if not fragment:
-            self._logger.warning(f"Page fragment not found: {target_uuid}:{fragment_key}")
+            #self._logger.warning(f"Page fragment not found: {target_uuid}:{fragment_key}")
             self._recursion_depth -= 1
             return ""
         
@@ -641,7 +647,21 @@ class TemplateRenderer:
             
             # Increment view count
             page.increment_view_count(self.session)
-            
+
+            # Apply theme's HTML compression settings if theme exists
+            if theme and any([theme.consolidate_css, theme.consolidate_js, 
+                            theme.minify_css, theme.minify_js, theme.minify_html]):
+                from app.classes import HTMLCompressor
+                compressor = HTMLCompressor()
+                rendered_content = compressor.clean_html(
+                    rendered_content,
+                    consolidate_css=theme.consolidate_css,
+                    consolidate_js=theme.consolidate_js,
+                    minify_css=theme.minify_css,
+                    minify_js=theme.minify_js,
+                    minify_html=theme.minify_html)
+
+
             #self._logger.info(f"Successfully rendered page: {page.slug}")
             return rendered_content
             
@@ -1033,9 +1053,8 @@ class TemplateRenderer:
             
 def render_template(page_identifier, **data):
     """Convenience function for rendering templates"""
-    from app.database import get_db_session  # Adjust import as needed
     
-    session = get_db_session()
+    session = g.session
     try:
         engine = TemplateRenderer(session)
         return engine.render_template(page_identifier, **data)

@@ -7,7 +7,9 @@ from flask import session
 
 class ReportQueryGenerator(ABC):
     """Abstract base class for report query generation"""
-    
+    __depends_on__ = []  
+
+
     @abstractmethod
     def build_paginated_query(self, base_query, columns, filters, order_by, limit, offset):
         """Build a paginated query with filters and ordering"""
@@ -55,7 +57,8 @@ class ReportQueryGenerator(ABC):
 
 class MSSQLQueryGenerator(ReportQueryGenerator):
     """Query generator for Microsoft SQL Server"""
-    
+    __depends_on__ = []  
+
     def get_row_number_syntax(self):
         return "ROW_NUMBER() OVER"
     
@@ -86,6 +89,7 @@ class MSSQLQueryGenerator(ReportQueryGenerator):
 
 class PostgreSQLQueryGenerator(ReportQueryGenerator):
     """Query generator for PostgreSQL"""
+    __depends_on__ = []  
     
     def get_row_number_syntax(self):
         return "ROW_NUMBER() OVER"
@@ -113,7 +117,8 @@ class PostgreSQLQueryGenerator(ReportQueryGenerator):
 
 class MySQLQueryGenerator(ReportQueryGenerator):
     """Query generator for MySQL"""
-    
+    __depends_on__ = []  
+
     def get_row_number_syntax(self):
         # MySQL 8.0+ supports ROW_NUMBER()
         return "ROW_NUMBER() OVER"
@@ -140,6 +145,9 @@ class MySQLQueryGenerator(ReportQueryGenerator):
 
 class ReportQueryExecutor:
     """Main class for executing report queries across different database types"""
+    __depends_on__ = ['MSSQLQueryGenerator',
+                      'PostgreSQLQueryGenerator',
+                      'MySQLQueryGenerator']
     
     GENERATORS = {
         'mssql': MSSQLQueryGenerator,
@@ -268,7 +276,7 @@ class ReportQueryExecutor:
                 for column_name in result._mapping.keys():
                     columns.append({
                         'name': column_name,
-                        'display': VirtualReport.format_column_display(column_name),
+                        'display': column_name,
                         'type': 'text',
                         'desc': ''
                     })

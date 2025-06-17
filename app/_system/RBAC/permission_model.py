@@ -11,7 +11,8 @@ class Permission(BaseModel):
     Examples: accounting:read, customer:update, invoice:approve
     """
     __tablename__ = 'permissions'
-
+    __depends_on_ = []
+    
     name = Column(String(100), unique=True, nullable=False)  # "accounting:read"
     service = Column(String(50), nullable=False)             # "accounting"
     action = Column(String(50), nullable=False)              # "read", "write", "create", "delete", "approve"

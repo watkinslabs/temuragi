@@ -7,15 +7,19 @@ from sqlalchemy import text, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from app.models import (
-    Report, ReportColumn, ReportVariable, ReportExecution,
-    ReportSchedule, ReportTemplate, Connection, DataType,
-    VariableType, DatabaseType, Template
-)
 try:
+    from app.classes import QueryMetadataError, QueryMetadataExtractor
     from app.classes import ReportQueryExecutor
-    from app.classes import QueryMetadataExtractor, QueryMetadataError
+except Exception as ex:
+    pass
 
+#from .metadata_extractor_class import QueryMetadataExtractor
+try:
+    from app.models import (
+        Report, ReportColumn, ReportVariable, ReportExecution,
+        ReportSchedule,  Connection, DataType, ReportTemplate,
+        VariableType, DatabaseType, Template
+    )
 except Exception as ex:
     pass
 
@@ -24,10 +28,13 @@ class ReportService:
     Comprehensive service for managing reports, templates, and executions.
     Handles all report-related operations including CRUD, execution, and template management.
     """
-
-    __depends_on__ = [ 'ReportQueryExecutor','QueryMetadataExtractor' ]
+    __depends_on__ = ['ReportTemplate','ReportQueryExecutor','QueryMetadataExtractor','Report', 
+                      'ReportColumn', 'ReportVariable', 'ReportExecution',
+                        'ReportSchedule',  'Connection', 'DataType', 
+                        'VariableType', 'DatabaseType', 'Template' ]
 
     def __init__(self, session: Session, logger: Optional[logging.Logger] = None):
+        
         self.session = session
         self.logger = logger or logging.getLogger(__name__)
         self.metadata_extractor = QueryMetadataExtractor(logger=self.logger)

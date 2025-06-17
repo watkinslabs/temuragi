@@ -10,7 +10,7 @@ from app.base.model import BaseModel
 class ReportExecution(BaseModel):
     """Model for tracking report execution history"""
     __tablename__ = 'report_executions'
-    __depends_on__ = ['Report']
+    __depends_on__ = ['Report','User']
     
     report_id = Column(
         PG_UUID(as_uuid=True),

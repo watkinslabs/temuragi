@@ -1,20 +1,18 @@
-from flask import Blueprint, request, jsonify, g
-from werkzeug.exceptions import BadRequest, Unauthorized
 import uuid
 import time
 import traceback
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import or_, and_, desc, asc, func, text
-from sqlalchemy.orm import Query
-from datetime import datetime, timezone
-import re
-import logging
+from sqlalchemy.orm import RelationshipProperty
+from sqlalchemy import or_,  desc, asc, func
+from flask import request, jsonify, g
 
-from app.register.database import get_model
+from app.register.classes import get_model
 
 
 class MinerError(Exception):
     """Custom exception for Miner operations"""
+    __depends_on__ =[]
+
     def __init__(self, message, error_type="MinerError", status_code=400, details=None):
         self.message = message
         self.error_type = error_type
@@ -25,6 +23,8 @@ class MinerError(Exception):
 
 class MinerPermissionError(MinerError):
     """Permission denied error"""
+    __depends_on__ =[]
+
     def __init__(self, message, permission_required=None):
         super().__init__(message, "PermissionError", 403, {'permission_required': permission_required})
 
@@ -33,8 +33,8 @@ class Miner:
     """
     Enhanced Data API handler with RBAC, logging, audit trails, and slim output
     """
+    __depends_on__ = [ 'MinerError', 'MinerPermissionError', 'RbacPermissionChecker']
 
-    __depends_on__ = ['MinerError', 'MinerPermissionError', 'RbacPermissionChecker']
     def __init__(self, app=None):
         self.app = app
         self.logger = None
@@ -670,7 +670,6 @@ class Miner:
                 mapper_property = model_class.__mapper__.get_property(field_name)
                 
                 # Check if it's a RelationshipProperty
-                from sqlalchemy.orm import RelationshipProperty
                 if isinstance(mapper_property, RelationshipProperty):
                     # Handle relationship filters
                     if value:  # Only filter if value is provided

@@ -9,6 +9,7 @@ from app.base.model import BaseModel
 
 class VariableType(BaseModel):
     __tablename__ = 'variable_types'
+    __depends_on__ = []  
 
     name = Column(String, unique=True, nullable=False)
     display = Column(String, nullable=False)

@@ -7,7 +7,7 @@ from app.base.model import BaseModel
 
 class Role(BaseModel):
     __tablename__ = 'roles'
-
+    __depends_on__ =[]
     name = Column(String(100), unique=True, nullable=False)
     display = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)

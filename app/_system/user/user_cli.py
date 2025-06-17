@@ -13,7 +13,6 @@ from tabulate import tabulate
 
 # Add your app path to import the model and config
 sys.path.append('/web/temuragi')
-from app.register.database import register_models_for_cli, get_model
 from app.base.cli import BaseCLI
 
 CLI_DESCRIPTION = "Manages user accounts and authentication"

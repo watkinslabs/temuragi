@@ -3,15 +3,14 @@ from flask import request, session as flask_session, g
 from functools import wraps
 from datetime import datetime, timezone
 
-from app.register.database import get_model
-
+from app.register.classes import get_model
 
 class RbacPermissionChecker:
     """
     Centralized RBAC permission checker with automatic audit logging
     Use this for ALL permission checks across the entire system
     """
-    
+    __depends_on_ = []
     def __init__(self, session):
         self.session = session
         self.role_permission_model = get_model('RolePermission')

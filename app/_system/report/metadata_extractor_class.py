@@ -5,12 +5,20 @@ from sqlalchemy import create_engine, text as sql_text
 from sqlalchemy.engine import Engine, Connection, Result
 
 
+
+class QueryMetadataError(Exception):
+    """Custom exception for query metadata extraction errors."""
+    __depends_on__=[]
+
+        
+
+
 class QueryMetadataExtractor:
     """
     Extracts column metadata from SQL queries without fetching data.
     Supports multiple database types with appropriate fallback mechanisms.
     """
-    __depends_on__ = ['QueryMetadataError']
+    __depends_on__ = []
 
     def __init__(self, logger: Optional[logging.Logger] = None):
         self.logger = logger or logging.getLogger(__name__)
@@ -352,8 +360,3 @@ class QueryMetadataExtractor:
         
         return analysis
 
-
-class QueryMetadataError(Exception):
-    """Custom exception for query metadata extraction errors."""
-    __depends_on__=[]
-    pass

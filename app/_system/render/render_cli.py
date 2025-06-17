@@ -10,7 +10,7 @@ import uuid
 from jinja2 import Environment
 sys.path.append('/web/temuragi')
 from app.base.cli import BaseCLI
-from app.classes import TemplateRenderer
+
 
 CLI_DESCRIPTION = "Template and page rendering"
 
@@ -145,7 +145,8 @@ class RenderCLI(BaseCLI):
                 except json.JSONDecodeError as e:
                     self.output_error(f"Invalid JSON data: {e}")
                     return 1
-
+            
+            from app.classes import TemplateRenderer
             # Create renderer and render page
             renderer = TemplateRenderer(self.session)
             rendered_content = renderer.render_template(page.uuid, **data)

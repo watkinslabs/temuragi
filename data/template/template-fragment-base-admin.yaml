@@ -35,6 +35,8 @@ TemplateFragment:
             <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.css" integrity="sha512-uf06llspW44/LZpHzHT6qBOIVODjWtv4MxCricRxkzvopAlSWnTf6hpZTFxuuZcuNE9CBQhqE0Seu1CoRk84nQ==" crossorigin="anonymous" referrerpolicy="no-referrer" />
             <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/sql/sql.min.js" integrity="sha512-JOURLWZEM9blfKvYn1pKWvUZJeFwrkn77cQLJOS6M/7MVIRdPacZGNm2ij5xtDV/fpuhorOswIiJF3x/woe5fw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
             <script src="/static/app.js"></script>
+            <script src="/static/header.js"></script>
+            <script src="/static/sidebar.js"></script>
             <script src="/static/report.js"></script>
             <script src="https://unpkg.com/htmx.org@1.9.10"></script>
             <script src="https://unpkg.com/htmx.org/dist/ext/head-support.js"></script>
@@ -116,137 +118,21 @@ TemplateFragment:
             <script>
                 const csrf_token = document.querySelector('meta[name="csrf-token"]').content;
 
-                class AppInitializer {
-                    constructor() {
-                        this.token_manager = null;
-                        this.auth_manager = null;
-                        this.connection_monitor = null;
-                        this.health_check_interval = window.health_check_interval || 10000;
-                    }
-                    
-                    async init() {
-                        // Create instances
-                        this.token_manager = new TokenManager();
-                        
-                        this.auth_manager = new AuthManager(this.token_manager, {
-                            login_url: '{{ url_for("auth.login") }}',
-                            validate_url: '{{ url_for("api_auth.validate") }}',
-                            refresh_url: '{{ url_for("api_auth.refresh") }}',
-                            logout_url: '{{ url_for("api_auth.logout") }}',
-                            status_url: '{{ url_for("api_auth.status") }}'
-                        });
-                        
-                        this.connection_monitor = new ConnectionMonitor({
-                            health_endpoint: '{{ url_for("api_auth.health") }}',
-                            check_interval: this.health_check_interval,
-                            max_consecutive_failures: 1
+                const app_urls = {
+                    login_url: '{{ url_for("auth.login") }}',
+                    validate_url: '{{ url_for("api_auth.validate") }}',
+                    refresh_url: '{{ url_for("api_auth.refresh") }}',
+                    logout_url: '{{ url_for("api_auth.logout") }}',
+                    status_url: '{{ url_for("api_auth.status") }}',
+                    health_endpoint: '{{ url_for("api_auth.health") }}',
+                    login_page_path: '{{ url_for("auth.login") }}'
+                };
 
-                        });
-                        
-                        // Set cross-references
-                        this.connection_monitor.set_token_manager(this.token_manager);
-                        this.connection_monitor.set_auth_manager(this.auth_manager);
-                        this.auth_manager.set_connection_monitor(this.connection_monitor);
-                        
-                        // Expose globally for backwards compatibility
-                        window.token_manager = this.token_manager;
-                        window.auth_manager = this.auth_manager;
-                        window.connection_monitor = this.connection_monitor;
-                        
-                        // Global functions
-                        window.logout = () => this.auth_manager.logout();
-                        window.check_auth_status = () => this.auth_manager.check_status();
-                        
-                        // Check if we're on login page
-                        const is_login_page = window.location.pathname === '{{ url_for("auth.login") }}';
-                        
-                        if (!is_login_page) {
-                            // Initialize authentication
-                            const auth_success = await this.auth_manager.init();
-                            
-                            // Hide loading screen
-                            document.getElementById('auth-loading').classList.add('hidden');
-                            
-                            if (auth_success) {
-                                // Show app content
-                                document.getElementById('app-content').style.display = 'block';
-                            }
-                            // If auth fails, init() will redirect to login
-                        } else {
-                            // On login page - just hide loader and show content
-                            document.getElementById('auth-loading').classList.add('hidden');
-                            document.getElementById('app-content').style.display = 'block';
-                        }
-                        
-                        // Set up HTMX loading indicators
-                        this.setup_htmx_indicators();
-                        
-                        // Set up visibility change handler
-                        this.setup_visibility_handler();
-                    }
-                    
-                    setup_htmx_indicators() {
-                        document.body.addEventListener('htmx:beforeRequest', function(evt) {
-                            document.body.classList.add('htmx-loading');
-                        });
-                        
-                        document.body.addEventListener('htmx:afterRequest', function(evt) {
-                            document.body.classList.remove('htmx-loading');
-                        });
-                        
-                        // Process new content after HTMX swaps
-                        document.body.addEventListener('htmx:afterSwap', function(evt) {
-                            console.log('afterSwap fired, target:', evt.detail.target);
-                            
-                            // Process the swapped content for new HTMX elements
-                            if (evt.detail.target) {
-                                console.log('Processing HTMX on:', evt.detail.target);
-                                htmx.process(evt.detail.target);
-                                
-                                // Also process any tables that might have been loaded
-                                const tables = evt.detail.target.querySelectorAll('.dataTable');
-                                tables.forEach(table => {
-                                    console.log('Found table:', table.id);
-                                    htmx.process(table.parentElement);
-                                });
-                            }
-                            
-                            // Handle nav active states if needed
-                            if (evt.detail.elt && evt.detail.elt.classList.contains('nav_item')) {
-                                document.querySelectorAll('.nav_item[aria-current="page"]').forEach(el => {
-                                    el.removeAttribute('aria-current');
-                                });
-                                evt.detail.elt.setAttribute('aria-current', 'page');
-                            }
-                        });
-                        
-                        // Also process after settle (when all animations are done)
-                        document.body.addEventListener('htmx:afterSettle', function(evt) {
-                            console.log('afterSettle fired');
-                            if (evt.detail.target) {
-                                htmx.process(evt.detail.target);
-                            }
-                        });
-                    }
-                    setup_visibility_handler() {
-                        document.addEventListener('visibilitychange', async () => {
-                            if (!document.hidden && this.auth_manager.validation_interval) {
-                                console.log('Tab became active - validating tokens');
-                                const is_valid = await this.auth_manager.validate_tokens();
-                                if (!is_valid) {
-                                    this.auth_manager.redirect_to_login();
-                                }
-                            }
-                        });
-                    }
-                }
-
-                // Initialize when DOM is ready
                 document.addEventListener('DOMContentLoaded', async () => {
-                    const app = new AppInitializer();
+                    const app = new AppInitializer(app_urls);
                     await app.init();
                 });
-            </script>
+                </script>
         </body>
         </html>
       template_hash: null

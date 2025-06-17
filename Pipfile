@@ -19,6 +19,9 @@ flask = "*"
 tabulate = "*"
 pyjwt = "*"
 sqlalchemy-utils = "*"
+beautifulsoup4 = "*"
+csscompressor = "*"
+jsmin = "*"
 
 [dev-packages]
 

@@ -178,7 +178,7 @@ class PageFragment(BaseModel):
     def get_active_version(cls, session, page_uuid, fragment_key):
         """Get the currently active version for a specific page and fragment_key"""
         logger = cls._get_logger()
-        logger.debug(f"Getting active version for page {page_uuid}, fragment {fragment_key}")
+        #logger.debug(f"Getting active version for page {page_uuid}, fragment {fragment_key}")
         
         fragment = session.query(cls)\
                          .filter_by(page_uuid=page_uuid,
@@ -186,10 +186,10 @@ class PageFragment(BaseModel):
                                    is_active=True)\
                          .first()
         
-        if fragment:
-            logger.debug(f"Found active version {fragment.version_number} for {fragment_key}")
-        else:
-            logger.warning(f"No active version found for page {page_uuid}, fragment {fragment_key}")
+        #if fragment:
+        #    logger.debug(f"Found active version {fragment.version_number} for {fragment_key}")
+        #else:
+        #    logger.warning(f"No active version found for page {page_uuid}, fragment {fragment_key}")
         
         return fragment
 
@@ -197,7 +197,7 @@ class PageFragment(BaseModel):
     def get_active_by_key(cls, session, page_uuid, fragment_key):
         """Get active fragment by page and fragment_key (includes visibility check)"""
         logger = cls._get_logger()
-        logger.debug(f"Getting active fragment by key: page {page_uuid}, fragment {fragment_key}")
+        #logger.debug(f"Getting active fragment by key: page {page_uuid}, fragment {fragment_key}")
         
         fragment = session.query(cls)\
                          .filter_by(page_uuid=page_uuid,
@@ -206,11 +206,11 @@ class PageFragment(BaseModel):
                          .first()
         
         if not fragment:
-            logger.warning(f"No active fragment found for page {page_uuid}, fragment {fragment_key}")
+        #    logger.warning(f"No active fragment found for page {page_uuid}, fragment {fragment_key}")
             return None
         
         if not fragment.is_visible():
-            logger.info(f"Fragment {fragment_key} found but not visible (published: {fragment.is_published})")
+        #    logger.info(f"Fragment {fragment_key} found but not visible (published: {fragment.is_published})")
             return None
             
         logger.debug(f"Successfully retrieved visible fragment {fragment_key}")
