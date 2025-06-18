@@ -25,7 +25,6 @@ class ReportBuilder {
             import_report:            config.import_report,
             reorder_columns:          config.reorder_columns,
             validate_variables:       config.validate_variables,
-            // New metadata URLs
             query_metadata:           config.query_metadata,
             analyze_columns:          config.analyze_columns,
             sync_columns:             config.sync_columns,
@@ -54,6 +53,10 @@ class ReportBuilder {
             categories: [],
             pending_column_analysis: null // Store analysis results
         };
+
+        // Separate tracking for server UUIDs
+        this.column_uuids = {}; // Map column names to their server UUIDs
+        this.variable_uuids = {}; // Map variable names to their server UUIDs
 
         // Initialize
         this.init();
@@ -126,7 +129,7 @@ class ReportBuilder {
                 this.load_variable_types()
             ]);
 
-            // If editing, load existing report
+            // If editing, load existing report AFTER loading connections/templates
             if (this.is_edit_mode) {
                 await this.load_existing_report();
             }
@@ -136,6 +139,9 @@ class ReportBuilder {
 
             // Setup event handlers
             this.setup_event_handlers();
+
+            // Update save button text
+            this.update_save_button_text();
 
             console.log('Report Builder initialized successfully');
         } catch (error) {
@@ -174,12 +180,9 @@ class ReportBuilder {
         $('#addVariableBtn').on('click', () => this.add_variable());
         $('#runPreviewBtn').on('click', () => this.run_preview());
         $('#saveReportBtn').on('click', () => this.save_report());
-        $('#saveDraftBtn').on('click', () => this.save_draft());
-        
-        // New metadata buttons
-        $('#analyzeColumnsBtn').on('click', () => this.analyze_columns_from_query());
-        $('#syncColumnsBtn').on('click', () => this.sync_columns_from_query());
-        $('#autoDetectTypesBtn').on('click', () => this.auto_detect_column_types());
+
+        // Update save button text based on mode
+        this.update_save_button_text();
 
         // Tab change handler
         $('button[data-bs-toggle="pill"]').on('shown.bs.tab', (e) => {
@@ -190,10 +193,16 @@ class ReportBuilder {
                 // If we have pending column analysis, show it
                 this.show_column_analysis_results();
             }
+            // Note: Nothing special happens when clicking variables tab
         });
     }
 
-    // Data Loading Methods (unchanged)
+    update_save_button_text() {
+        const button_text = this.is_edit_mode ? 'Save Report' : 'Create Report';
+        $('#saveReportBtn').text(button_text);
+    }
+
+    // Data Loading Methods
     async load_connections() {
         try {
             const result = await this.api_request(this.urls.data_api, {
@@ -208,9 +217,26 @@ class ReportBuilder {
                 const select = $('#reportConnection');
                 select.empty().append('<option value="">Select a connection...</option>');
 
+                // Debug: log first connection to see available fields
+                if (result.data.length > 0) {
+                    console.log('Connection fields:', Object.keys(result.data[0]));
+                }
+
                 result.data.forEach(conn => {
-                    select.append(`<option value="${conn.uuid}">${conn.name} (${conn.db_type})</option>`);
+                    // Use appropriate fields - db_type might be database_type, type, or engine
+                    const db_type = conn.db_type || conn.database_type || conn.type || conn.engine || '';
+                    const display_text = db_type ? `${conn.name} (${db_type})` : conn.name;
+                    select.append(`<option value="${conn.uuid}">${display_text}</option>`);
                 });
+                
+                // Check for pending connection
+                if (this._pending_connection_id) {
+                    $('#reportConnection').val(this._pending_connection_id);
+                    delete this._pending_connection_id;
+                } else if (this.is_edit_mode && this.report_data.report?.connection_id) {
+                    // Try to restore connection if we already have report data
+                    $('#reportConnection').val(this.report_data.report.connection_id);
+                }
             }
         } catch (error) {
             console.error('Failed to load connections:', error);
@@ -232,6 +258,12 @@ class ReportBuilder {
                 result.data.forEach(template => {
                     select.append(`<option value="${template.uuid}">${template.display_name}</option>`);
                 });
+                
+                // Check for pending template
+                if (this._pending_template_id) {
+                    $('#reportTemplate').val(this._pending_template_id);
+                    delete this._pending_template_id;
+                }
             }
         } catch (error) {
             console.error('Failed to load report templates:', error);
@@ -329,32 +361,94 @@ class ReportBuilder {
                 $('#isPublic').prop('checked', flags.is_public);
                 $('#isDownloadCsv').prop('checked', flags.is_download_csv);
                 $('#isDownloadXlsx').prop('checked', flags.is_download_xlsx);
+                $('#isPublished').prop('checked', definition.report.is_active !== false);
 
                 // Set options
                 const options = definition.report.options || {};
                 $('#resultsLimit').val(options.results_limit || 0);
                 $('#cacheMinutes').val(options.cache_duration_minutes || 60);
 
-                // Set connection and template
-                $('#reportConnection').val(definition.report.connection_id || '');
-                $('#reportTemplate').val(definition.report.report_template_id || '');
+                // Set connection and template with validation
+                const connection_id = definition.report.connection_id || '';
+                const template_id = definition.report.report_template_id || '';
+                
+                // Ensure the connection exists in dropdown before setting
+                if (connection_id && $(`#reportConnection option[value="${connection_id}"]`).length) {
+                    $('#reportConnection').val(connection_id);
+                } else if (connection_id) {
+                    console.warn('Connection ID not found in dropdown:', connection_id);
+                    // Store it for later in case connections haven't loaded yet
+                    this._pending_connection_id = connection_id;
+                }
+                
+                // Ensure the template exists in dropdown before setting
+                if (template_id && $(`#reportTemplate option[value="${template_id}"]`).length) {
+                    $('#reportTemplate').val(template_id);
+                } else if (template_id) {
+                    console.warn('Template ID not found in dropdown:', template_id);
+                    this._pending_template_id = template_id;
+                }
 
                 // Process columns and variables
                 this.report_data.columns = definition.columns || [];
                 this.report_data.variables = definition.variables || [];
 
-                // Map data type names back to UUIDs
-                this.report_data.columns.forEach(col => {
-                    const data_type = Object.values(this.report_data.data_types).find(dt => dt.name === col.data_type);
-                    if (data_type) col.data_type_id = data_type.uuid;
-                });
+                // Get the actual column and variable UUIDs from the server
+                if (this.is_edit_mode) {
+                    // Fetch actual column records to get their UUIDs
+                    const existing_columns = await this.get_existing_columns(this.report_id);
+                    this.column_uuids = {}; // Clear and rebuild
+                    existing_columns.forEach(col => {
+                        this.column_uuids[col.name] = col.uuid;
+                    });
 
-                this.report_data.variables.forEach(variable => {
-                    const var_type = Object.values(this.report_data.variable_types).find(vt => vt.name === variable.variable_type);
-                    const data_type = Object.values(this.report_data.data_types).find(dt => dt.name === variable.data_type);
-                    if (var_type) variable.variable_type_id = var_type.uuid;
-                    if (data_type) variable.data_type_id = data_type.uuid;
-                });
+                    // Fetch actual variable records to get their UUIDs
+                    const existing_variables = await this.get_existing_variables(this.report_id);
+                    this.variable_uuids = {}; // Clear and rebuild
+                    existing_variables.forEach(variable => {
+                        this.variable_uuids[variable.name] = variable.uuid;
+                    });
+
+                    // Map data type names back to UUIDs for columns
+                    this.report_data.columns.forEach(col => {
+                        const data_type = Object.values(this.report_data.data_types).find(dt => dt.name === col.data_type);
+                        if (data_type) {
+                            col.data_type_id = data_type.uuid;
+                        } else {
+                            // If we can't find the type, use default
+                            col.data_type_id = this.get_default_data_type(col.data_type || 'string');
+                        }
+                    });
+
+                    // Map variable type names back to UUIDs
+                    this.report_data.variables.forEach(variable => {
+                        const var_type = Object.values(this.report_data.variable_types).find(vt => vt.name === variable.variable_type);
+                        if (var_type) {
+                            variable.variable_type_id = var_type.uuid;
+                        } else {
+                            variable.variable_type_id = this.get_default_variable_type('text');
+                        }
+                    });
+                } else {
+                    // For new reports, just map the data types
+                    this.report_data.columns.forEach(col => {
+                        const data_type = Object.values(this.report_data.data_types).find(dt => dt.name === col.data_type);
+                        if (data_type) {
+                            col.data_type_id = data_type.uuid;
+                        } else {
+                            col.data_type_id = this.get_default_data_type(col.data_type || 'string');
+                        }
+                    });
+
+                    this.report_data.variables.forEach(variable => {
+                        const var_type = Object.values(this.report_data.variable_types).find(vt => vt.name === variable.variable_type);
+                        if (var_type) {
+                            variable.variable_type_id = var_type.uuid;
+                        } else {
+                            variable.variable_type_id = this.get_default_variable_type('text');
+                        }
+                    });
+                }
 
                 this.render_columns();
                 this.render_variables();
@@ -455,13 +549,29 @@ class ReportBuilder {
                 }
             }
             
-            // Find data type UUID
-            const data_type = Object.values(this.report_data.data_types).find(dt => dt.name === meta_col.type);
+            // Find data type UUID - try multiple approaches
+            let data_type_id = null;
             
+            // First try exact match on name
+            const data_type = Object.values(this.report_data.data_types).find(dt => dt.name === meta_col.type);
+            if (data_type) {
+                data_type_id = data_type.uuid;
+            } else {
+                // Try to get default based on SQL type
+                data_type_id = this.get_default_data_type(meta_col.sql_type || meta_col.type);
+            }
+            
+            // If still null, use string as ultimate fallback
+            if (!data_type_id) {
+                const string_type = Object.values(this.report_data.data_types).find(dt => dt.name === 'string');
+                data_type_id = string_type ? string_type.uuid : Object.values(this.report_data.data_types)[0]?.uuid;
+            }
+            
+            // Create clean column object with ONLY the fields we need
             columns.push({
                 name: meta_col.name,
                 display_name: suggestions.display_name || meta_col.name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                data_type_id: data_type ? data_type.uuid : this.get_default_data_type(meta_col.sql_type),
+                data_type_id: data_type_id,
                 order_index: idx,
                 is_searchable: suggestions.is_searchable !== undefined ? suggestions.is_searchable : true,
                 is_visible: suggestions.is_visible !== undefined ? suggestions.is_visible : true,
@@ -772,7 +882,6 @@ class ReportBuilder {
                     name: var_name,
                     display_name: var_name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                     variable_type_id: this.get_default_variable_type('text'),
-                    data_type_id: this.get_default_data_type('string'),
                     order_index: idx,
                     is_required: true
                 }));
@@ -832,7 +941,6 @@ class ReportBuilder {
         this.query_editor.setValue(formatted);
     }
 
-    // Column Management (mostly unchanged, with minor enhancements)
     render_columns() {
         const container = $('#columnsList');
         container.empty();
@@ -844,6 +952,9 @@ class ReportBuilder {
         if (!$('#columnAnalysisResults').length) {
             container.before('<div id="columnAnalysisResults" style="display:none;"></div>');
         }
+
+        // Remove any existing management buttons before adding new ones
+        $('#columnManagementButtons').remove();
 
         if (this.report_data.columns.length === 0) {
             container.html(`
@@ -857,33 +968,48 @@ class ReportBuilder {
             return;
         }
 
-        // Add column management buttons
-        container.before(`
-            <div class="mb-3" id="columnManagementButtons">
-                <button class="btn btn-sm btn-secondary" id="analyzeColumnsBtn">
-                    <i class="fas fa-search"></i> Analyze Columns
-                </button>
-                <button class="btn btn-sm btn-warning" id="syncColumnsBtn">
-                    <i class="fas fa-sync"></i> Sync with Query
-                </button>
-                <button class="btn btn-sm btn-info" id="autoDetectTypesBtn">
-                    <i class="fas fa-magic"></i> Auto-Detect Types
-                </button>
-            </div>
-        `);
+        // Add column management buttons only if in edit mode
+        if (this.is_edit_mode) {
+            container.before(`
+                <div class="mb-3" id="columnManagementButtons">
+                    <button class="btn btn-sm btn-secondary" id="analyzeColumnsBtn">
+                        <i class="fas fa-search"></i> Analyze Columns
+                    </button>
+                    <button class="btn btn-sm btn-warning" id="syncColumnsBtn">
+                        <i class="fas fa-sync"></i> Sync with Query
+                    </button>
+                    <button class="btn btn-sm btn-info" id="autoDetectTypesBtn">
+                        <i class="fas fa-magic"></i> Auto-Detect Types
+                    </button>
+                </div>
+            `);
+            
+            $('#analyzeColumnsBtn').on('click', () => this.analyze_columns_from_query());
+            $('#syncColumnsBtn').on('click', () => this.sync_columns_from_query());
+            $('#autoDetectTypesBtn').on('click', () => this.auto_detect_column_types());
+        }
 
         this.report_data.columns.forEach((col, idx) => {
             const html = this.create_column_html(col, idx);
             container.append(html);
         });
 
-        // Make sortable if library is available
-        if (typeof Sortable !== 'undefined') {
-            new Sortable(container[0], {
+        // Use jQuery UI Sortable
+        if ($.fn.sortable) {
+            // destroy existing sortable if any
+            if (container.hasClass('ui-sortable')) {
+                container.sortable('destroy');
+            }
+            let start_index;
+            container.sortable({
                 handle: '.drag-handle',
-                animation: 150,
-                onEnd: (evt) => {
-                    this.reorder_columns(evt.oldIndex, evt.newIndex);
+                placeholder: 'sortable-placeholder',
+                start: (event, ui) => {
+                    start_index = ui.item.index();
+                },
+                update: (event, ui) => {
+                    const new_index = ui.item.index();
+                    this.reorder_columns(start_index, new_index);
                 }
             });
         }
@@ -994,10 +1120,16 @@ class ReportBuilder {
     add_column() {
         const name = prompt('Column name:');
         if (name) {
+            // Ensure we have a valid data_type_id
+            let default_data_type_id = this.get_default_data_type('string');
+            if (!default_data_type_id && Object.values(this.report_data.data_types).length > 0) {
+                default_data_type_id = Object.values(this.report_data.data_types)[0].uuid;
+            }
+            
             this.report_data.columns.push({
                 name: name,
                 display_name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                data_type_id: this.get_default_data_type('string'),
+                data_type_id: default_data_type_id,
                 order_index: this.report_data.columns.length,
                 is_searchable: true,
                 is_visible: true,
@@ -1017,9 +1149,11 @@ class ReportBuilder {
         this.report_data.columns.forEach((col, idx) => {
             col.order_index = idx;
         });
+        
+        // Note: The actual reorder API call will happen when saving
     }
 
-    // Variable Management (unchanged)
+    // Variable Management
     render_variables() {
         const container = $('#variablesList');
         container.empty();
@@ -1040,10 +1174,6 @@ class ReportBuilder {
             .map(vt => `<option value="${vt.uuid}" ${variable.variable_type_id === vt.uuid ? 'selected' : ''}>${vt.display}</option>`)
             .join('');
 
-        const data_type_options = Object.values(this.report_data.data_types)
-            .map(dt => `<option value="${dt.uuid}" ${variable.data_type_id === dt.uuid ? 'selected' : ''}>${dt.display}</option>`)
-            .join('');
-
         return `
             <div class="variable-item card mb-3" data-index="${idx}">
                 <div class="card-body">
@@ -1059,24 +1189,18 @@ class ReportBuilder {
                                    data-field="display_name" data-index="${idx}">
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Input Type</label>
+                            <label class="form-label">Variable Type</label>
                             <select class="form-select" data-field="variable_type_id" data-index="${idx}">
                                 ${variable_type_options}
                             </select>
                         </div>
                         <div class="col-md-3">
-                            <label class="form-label">Data Type</label>
-                            <select class="form-select" data-field="data_type_id" data-index="${idx}">
-                                ${data_type_options}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-md-4">
                             <label class="form-label">Default Value</label>
                             <input type="text" class="form-control" value="${variable.default_value || ''}"
                                    data-field="default_value" data-index="${idx}">
                         </div>
+                    </div>
+                    <div class="row mt-2">
                         <div class="col-md-4">
                             <label class="form-label">Placeholder</label>
                             <input type="text" class="form-control" value="${variable.placeholder || ''}"
@@ -1095,8 +1219,10 @@ class ReportBuilder {
                                            data-field="is_hidden" data-index="${idx}" id="hidden_${idx}">
                                     <label class="form-check-label" for="hidden_${idx}">Hidden</label>
                                 </div>
-                                <button class="btn btn-sm btn-danger float-end remove-variable-btn" data-index="${idx}">Remove</button>
                             </div>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-sm btn-danger float-end remove-variable-btn" data-index="${idx}">Remove</button>
                         </div>
                     </div>
                     <div class="row mt-2">
@@ -1133,7 +1259,6 @@ class ReportBuilder {
                 name: name,
                 display_name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                 variable_type_id: this.get_default_variable_type('text'),
-                data_type_id: this.get_default_data_type('string'),
                 order_index: this.report_data.variables.length,
                 is_required: true
             });
@@ -1141,7 +1266,7 @@ class ReportBuilder {
         }
     }
 
-    // Preview (unchanged)
+    // Preview
     prepare_preview() {
         // Build variable inputs
         const variable_inputs_html = this.report_data.variables
@@ -1261,17 +1386,14 @@ class ReportBuilder {
         $('#previewResults').html(table_html);
     }
 
-    // Save Operations (unchanged)
-    async save_report(is_draft = false) {
+    // Save Operations
+    async save_report() {
         if (!this.validate_report()) return;
 
         this.show_loading(true);
 
         try {
             const report_data = this.get_report_data();
-            if (is_draft) {
-                report_data.is_active = false;
-            }
 
             let result;
 
@@ -1307,24 +1429,14 @@ class ReportBuilder {
             await this.save_variables(report_uuid);
 
             // Success!
-            this.show_success(
-                is_draft ? 'Draft saved successfully!' : 'Report saved successfully!'
-            );
+            this.show_success('Report saved successfully!');
 
             // If it was a create, switch to edit mode
             if (!this.is_edit_mode) {
                 this.report_id = report_uuid;
                 this.is_edit_mode = true;
                 window.history.replaceState({}, '', `/reports/builder/${report_uuid}`);
-            }
-
-            // Offer to view the report
-            if (!is_draft) {
-                setTimeout(() => {
-                    if (confirm('Report saved! Would you like to view it now?')) {
-                        window.location.href = `/reports/view/${report_uuid}`;
-                    }
-                }, 1000);
+                this.update_save_button_text();
             }
 
         } catch (error) {
@@ -1332,10 +1444,6 @@ class ReportBuilder {
         } finally {
             this.show_loading(false);
         }
-    }
-
-    save_draft() {
-        this.save_report(true);
     }
 
     get_report_data() {
@@ -1359,7 +1467,7 @@ class ReportBuilder {
             is_public: $('#isPublic').is(':checked'),
             is_download_csv: $('#isDownloadCsv').is(':checked'),
             is_download_xlsx: $('#isDownloadXlsx').is(':checked'),
-            is_active: true,
+            is_active: $('#isPublished').is(':checked'),
             options: {
                 results_limit: parseInt($('#resultsLimit').val()) || 0,
                 cache_duration_minutes: parseInt($('#cacheMinutes').val()) || 60
@@ -1368,60 +1476,104 @@ class ReportBuilder {
     }
 
     async save_columns(report_uuid) {
-        // Skip if no columns defined yet
         if (this.report_data.columns.length === 0) {
-            console.log('No columns to save yet');
             return;
         }
-
-        // Delete existing columns if editing
+    
+    
+        // 4) **VALIDATION**: ensure every column has a data_type_id
+        const invalid_columns = this.report_data.columns.filter(col => !col.data_type_id);
+        
+        if (invalid_columns.length > 0) {
+            // pick a default string type
+            const default_type = Object.values(this.report_data.data_types)
+                .find(dt => dt.name === 'string')
+                || Object.values(this.report_data.data_types)[0];
+    
+        
+            if (!default_type) {
+                throw new Error('No data types available. Please refresh and try again.');
+            }
+    
+            invalid_columns.forEach(col => {
+                col.data_type_id = default_type.uuid;
+            });
+        }
+    
+    
+        // 6) Fetch existing columns map if in edit mode
+        let existing_columns_map = {};
         if (this.is_edit_mode) {
             const existing_columns = await this.get_existing_columns(report_uuid);
-            for (const col of existing_columns) {
-                await this.api_request(this.urls.data_api, {
-                    body: {
-                        model: 'ReportColumn',
-                        operation: 'delete',
-                        uuid: col.uuid
-                    }
-                });
-            }
-        }
-
-        // Add new columns
-        for (const column of this.report_data.columns) {
-            const col_result = await this.api_request(this.urls.data_api, {
-                body: {
-                    model: 'ReportColumn',
-                    operation: 'create',
-                    data: {
-                        ...column,
-                        report_id: report_uuid
-                    }
-                }
+            existing_columns.forEach(col => {
+                existing_columns_map[col.name] = col;
             });
-
-            if (!col_result.success) {
-                console.error('Failed to create column:', col_result.error);
-            }
         }
-
-        // Call reorder API only if we have columns and the API is available
-        if (this.urls.reorder_columns && this.report_data.columns.length > 0) {
-            const column_order = this.report_data.columns.map(col => col.name);
-            try {
-                await this.api_request(this.urls.reorder_columns, {
-                    body: {
-                        report_id: report_uuid,
-                        column_order: column_order
+    
+        // 7) Process create/update
+        const column_uuids = [];
+        for (let i = 0; i < this.report_data.columns.length; i++) {
+            const column = this.report_data.columns[i];
+            const existing_col = existing_columns_map[column.name];
+    
+            // payload build
+            const column_data = {
+                report_id: report_uuid,
+                name: column.name,
+                display_name: column.display_name,
+                data_type_id: column.data_type_id,
+                order_index: i,
+                is_searchable: column.is_searchable ?? true,
+                is_visible: column.is_visible ?? true,
+                is_sortable: column.is_sortable ?? true,
+                alignment: column.alignment || 'left',
+                format_string: column.format_string || null,
+                search_type: column.search_type || 'contains',
+                width: column.width || null,
+                options: column.options || {},
+            };
+    
+            console.log(`Column[${i}] payload:`, column_data);
+    
+            if (existing_col) {
+                try {
+                    const update_result = await this.api_request(this.urls.data_api, {
+                        body: {
+                            model: 'ReportColumn',
+                            operation: 'update',
+                            uuid: existing_col.uuid,
+                            data: column_data,
+                        }
+                    });
+                    if (update_result.success) {
+                        this.column_uuids[column.name] = existing_col.uuid;
+                        column_uuids.push(existing_col.uuid);
                     }
-                });
-            } catch (error) {
-                // Non-critical error - report is still saved
-                console.warn('Failed to set column order:', error);
+                } catch (err) {
+                    console.error('Exception during update:', err);
+                }
+                delete existing_columns_map[column.name];
+            } else {
+                try {
+                    const create_result = await this.api_request(this.urls.data_api, {
+                        body: {
+                            model: 'ReportColumn',
+                            operation: 'create',
+                            data: column_data,
+                        }
+                    });
+                    if (create_result.success && create_result.data?.uuid) {
+                        this.column_uuids[column.name] = create_result.data.uuid;
+                        column_uuids.push(create_result.data.uuid);
+                    }
+                } catch (err) {
+                    console.error('Exception during create:', err);
+                }
             }
         }
     }
+    
+    
 
     async save_variables(report_uuid) {
         // Skip if no variables defined yet
@@ -1430,36 +1582,87 @@ class ReportBuilder {
             return;
         }
 
-        // Delete existing variables if editing
+        // Get existing variables if editing
+        let existing_variables_map = {};
         if (this.is_edit_mode) {
             const existing_variables = await this.get_existing_variables(report_uuid);
-            for (const variable of existing_variables) {
-                await this.api_request(this.urls.data_api, {
+            existing_variables.forEach(variable => {
+                existing_variables_map[variable.name] = variable;
+            });
+        }
+
+        // Process each variable
+        for (let i = 0; i < this.report_data.variables.length; i++) {
+            const variable = this.report_data.variables[i];
+            const existing_var = existing_variables_map[variable.name];
+            
+            // Build ONLY the fields we want to send - NO spreading!
+            const variable_data = {};
+            variable_data.report_id = report_uuid;
+            variable_data.name = variable.name;
+            variable_data.display_name = variable.display_name;
+            variable_data.variable_type_id = variable.variable_type_id;
+            variable_data.default_value = variable.default_value || null;
+            variable_data.placeholder = variable.placeholder || null;
+            variable_data.help_text = variable.help_text || null;
+            variable_data.is_required = variable.is_required;
+            variable_data.is_hidden = variable.is_hidden || false;
+            variable_data.limits = variable.limits || null;
+            variable_data.depends_on = variable.depends_on || null;
+            variable_data.dependency_condition = variable.dependency_condition || null;
+            variable_data.order_index = i;
+            
+            if (existing_var) {
+                // Update existing variable
+                const update_result = await this.api_request(this.urls.data_api, {
                     body: {
                         model: 'ReportVariable',
-                        operation: 'delete',
-                        uuid: variable.uuid
+                        operation: 'update',
+                        uuid: existing_var.uuid,
+                        data: variable_data
                     }
                 });
+
+                if (!update_result.success) {
+                    console.error('Failed to update variable:', update_result.error);
+                } else {
+                    // Track the UUID separately - DO NOT modify variable object
+                    this.variable_uuids[variable.name] = existing_var.uuid;
+                }
+                
+                // Remove from map so we know which ones to delete later
+                delete existing_variables_map[variable.name];
+            } else {
+                // Create new variable
+                const create_result = await this.api_request(this.urls.data_api, {
+                    body: {
+                        model: 'ReportVariable',
+                        operation: 'create',
+                        data: variable_data
+                    }
+                });
+
+                if (!create_result.success) {
+                    console.error('Failed to create variable:', create_result.error);
+                } else if (create_result.data && create_result.data.uuid) {
+                    // Track the UUID separately - DO NOT modify variable object
+                    this.variable_uuids[variable.name] = create_result.data.uuid;
+                }
             }
         }
 
-        // Add new variables
-        for (const variable of this.report_data.variables) {
-            const var_result = await this.api_request(this.urls.data_api, {
+        // Delete any variables that no longer exist
+        for (const var_name in existing_variables_map) {
+            const variable = existing_variables_map[var_name];
+            await this.api_request(this.urls.data_api, {
                 body: {
                     model: 'ReportVariable',
-                    operation: 'create',
-                    data: {
-                        ...variable,
-                        report_id: report_uuid
-                    }
+                    operation: 'delete',
+                    uuid: variable.uuid
                 }
             });
-
-            if (!var_result.success) {
-                console.error('Failed to create variable:', var_result.error);
-            }
+            // Remove from our tracking
+            delete this.variable_uuids[var_name];
         }
 
         // Validate variables if API available and we have variables
@@ -1482,9 +1685,11 @@ class ReportBuilder {
             body: {
                 model: 'ReportColumn',
                 operation: 'list',
-                filters: { report_id: report_uuid }
+                filters: { report_id: report_uuid },
+                length: 100
             }
         });
+        
         return result.success ? result.data : [];
     }
 
@@ -1521,7 +1726,7 @@ class ReportBuilder {
         return true;
     }
 
-    // Helper Methods (unchanged)
+    // Helper Methods
     get_default_data_type(sql_type) {
         const type_map = {
             'VARCHAR': 'string',
@@ -1548,13 +1753,21 @@ class ReportBuilder {
         for (const [key, value] of Object.entries(type_map)) {
             if (upper_type.includes(key)) {
                 const data_type = Object.values(this.report_data.data_types).find(dt => dt.name === value);
-                return data_type ? data_type.uuid : null;
+                if (data_type) return data_type.uuid;
             }
         }
 
         // Default to string
         const string_type = Object.values(this.report_data.data_types).find(dt => dt.name === 'string');
-        return string_type ? string_type.uuid : null;
+        if (string_type) return string_type.uuid;
+        
+        // Ultimate fallback - return first available data type
+        const first_type = Object.values(this.report_data.data_types)[0];
+        if (first_type) return first_type.uuid;
+        
+        // This should never happen if data types are loaded properly
+        console.error('No data types available!');
+        return null;
     }
 
     get_default_variable_type(type) {
@@ -1562,7 +1775,7 @@ class ReportBuilder {
         return var_type ? var_type.uuid : null;
     }
 
-    // UI Helper Methods (unchanged)
+    // UI Helper Methods
     show_loading(show) {
         if (show) {
             $('#loadingOverlay').show();

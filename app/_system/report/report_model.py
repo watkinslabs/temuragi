@@ -149,19 +149,14 @@ class Report(BaseModel):
         if not slug:
             raise ValueError("Slug cannot be empty")
         
-        # Check if this is an update (object already has an ID)
-        if self.uuid and hasattr(self, '_sa_instance_state'):
-            # Get the current value from the database
-            history = self._sa_instance_state.attrs.slug.history
-            if history.unchanged and history.unchanged[0] != slug:
-                raise ValueError("Slug cannot be changed after creation. Create a new report instead.")
-        
-        # Validate slug format
+        # Validate slug format first
         if not re.match(r'^[a-z0-9\-]+$', slug):
             raise ValueError("Slug can only contain lowercase letters, numbers, and hyphens")
         
+      
+        
         return slug
-    
+
     def save(self, session=None):
         """Override save to handle permission creation"""
         is_new = not self.uuid

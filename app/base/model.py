@@ -8,7 +8,9 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 class BaseModel(Base):
-    __abstract__ = True  # Makes this a non-table class
+    __abstract__ = True  
+    __depends_on__ =[]
+    __readonly_fields__ = ['uuid', 'created_at']  
 
     uuid = Column(
         UUID(as_uuid=True),

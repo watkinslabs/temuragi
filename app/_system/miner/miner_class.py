@@ -474,15 +474,28 @@ class Miner:
         if not instance:
             raise MinerError('Record not found', 'NotFoundError', 404)
 
+        # Get readonly fields for this model
+        readonly_fields = getattr(model_class, '__readonly_fields__', [])
+        
+        # Track attempted readonly updates and successful updates
+        readonly_attempts = []
+        fields_updated = []
+        
         # Update fields
         for field, value in update_data.items():
             if hasattr(instance, field):
-                setattr(instance, field, value)
+                if field in readonly_fields:
+                    readonly_attempts.append(field)
+                else:
+                    setattr(instance, field, value)
+                    fields_updated.append(field)
 
         g.session.commit()
 
         # Update audit data
         audit_data['records_returned'] = 1
+        audit_data['fields_updated'] = fields_updated
+        audit_data['readonly_attempts'] = readonly_attempts
 
         # Return updated object
         slim = data.get('slim', False)
@@ -494,10 +507,17 @@ class Miner:
             'message': f'{model_class.__name__} updated successfully'
         }
         
+        # Add warning if readonly fields were attempted
+        if readonly_attempts:
+            response['warning'] = f'The following readonly fields were not updated: {", ".join(readonly_attempts)}'
+            response['readonly_fields_attempted'] = readonly_attempts
+            self.logger.warning(f"User {audit_data.get('user_uuid')} attempted to update readonly fields {readonly_attempts} on {model_class.__name__} {record_uuid}")
+        
         if slim:
             response['metadata'] = self._get_model_metadata(model_class)
 
         return jsonify(response)
+
 
     def handle_delete(self, model_class, data, audit_data):
         """Handle delete operations"""
